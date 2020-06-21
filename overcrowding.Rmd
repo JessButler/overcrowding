@@ -1,0 +1,88 @@
+---
+title: "People Living in Overcrowded Homes in Aberdeen"
+
+output:
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: scroll
+---
+
+```{r setup, include=FALSE}
+library(here)
+library(tidyverse)
+library(sf)
+library(mapview)
+library(flexdashboard)
+library(gt)
+```
+
+
+```{r}
+#load SIMD data and shapefiles 
+
+SIMD2020v2_indicators <- read_csv(here("data", "SIMD2020v2_indicators.csv"))
+
+simd_sf <- st_read(here("data", "sc_dz_11.shp"), quiet = T)
+```
+
+```{r}
+#select Aberdeen City areas' data and remove percent signs
+#join to shapefile
+
+aberdeen <-
+  SIMD2020v2_indicators %>%
+  filter(Council_area == "Aberdeen City")
+
+aberdeen$overcrowded_rate <- as.numeric(sub("%", "", aberdeen$overcrowded_rate))
+
+aberdeen_data_zones <- pull(aberdeen, Data_Zone)
+
+aberdeen_sf <- filter(simd_sf, DataZone %in% aberdeen_data_zones)
+
+aberdeen_sf <-
+  merge(aberdeen_sf, aberdeen, by.x = "DataZone", by.y = "Data_Zone")
+
+```
+
+
+Row
+-------------------------------------
+
+###
+
+```{r}
+aberdeen_sf %>% 
+  mapview(
+    map.types = "OpenStreetMap", 
+    zcol = "overcrowded_rate", 
+    label = aberdeen_sf$Intermediate_Zone,
+    layer.name = "population (%)")
+```
+
+
+###
+
+```{r}
+#filter zones with most overcrowded population
+
+aberdeen %>%
+  select(Data_Zone, Intermediate_Zone, Total_population, overcrowded_rate) %>%
+  filter(overcrowded_rate >= 30) %>%
+  arrange(Intermediate_Zone) %>%
+  gt() %>%
+  tab_header(title = "Most overcrowded", subtitle = "Areas with at least 30% living in overcrowded homes") %>%
+  cols_label(Data_Zone = "Data Zone", Intermediate_Zone = "Area", Total_population = "Population", overcrowded_rate = "Overcrowded (%)")
+```
+
+Row
+-------------------------------------
+
+### Source Notes
+
+Overcrowding measure from National Records Scotland 2011 Census
+
+Data from https://www.gov.scot/collections/scottish-index-of-multiple-deprivation-2020/
+
+Map shapefiles from https://simd.scot
+
+Code at https://github.com/JessButler/overcrowded
